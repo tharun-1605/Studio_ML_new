@@ -1,4 +1,4 @@
-#!/mnt/app/Studio_ML/backend/venv/bin/python3
+#!/mnt/app/Studio_ML/backend/venv/bin/python
 # -*- coding: utf-8 -*-
 import re
 import sys
