@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Camera, Image as ImageIcon, Download, Search, CheckCircle2 } from 'lucide-react';
+import { Camera, Image as ImageIcon, Download, Search, CheckCircle2, RefreshCcw } from 'lucide-react';
 
 const API_BASE = 'http://localhost:8000/api';
 
