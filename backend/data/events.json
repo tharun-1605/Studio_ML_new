@@ -3,9 +3,9 @@
         "id": "86da1ef8-f8bb-45aa-8388-fdd99426219a",
         "name": "test",
         "mode": "live",
-        "status": "pending",
+        "status": "completed",
         "drive_link": "https://drive.google.com/drive/folders/17a_Nm3zHH6LHuVufc2dlE_RmRQhrS7RV?usp=sharing",
         "created_at": "2026-06-11T06:43:49.584306",
-        "photo_count": 0
+        "photo_count": 123
     }
 }

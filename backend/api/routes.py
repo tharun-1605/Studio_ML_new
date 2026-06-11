@@ -7,6 +7,7 @@ from fastapi import APIRouter, UploadFile, File, Form, HTTPException, Background
 from fastapi.responses import FileResponse
 
 from models.database import EventModel, get_event, get_all_events, create_event, update_event
+from services.drive_sync import index_event_photos, sync_drive_event
 from services.face_processor import FaceProcessor
 from datetime import datetime
 
@@ -18,6 +19,7 @@ def list_events():
 
 @router.post("/events", response_model=EventModel)
 def create_new_event(
+    background_tasks: BackgroundTasks,
     name: str = Form(...),
     mode: str = Form(...),
     drive_link: str = Form(None)
@@ -35,6 +37,10 @@ def create_new_event(
         created_at=datetime.utcnow()
     )
     create_event(event)
+
+    if mode == "live":
+        background_tasks.add_task(sync_drive_event, event_id)
+
     return event
 
 def process_archive_background(event_id: str, zip_path: str):
@@ -72,17 +78,9 @@ def process_archive_background(event_id: str, zip_path: str):
     finally:
         os.remove(zip_path) # Clean up zip
         
-    # Process Faces
-    processor = FaceProcessor(event_id)
-    photos = os.listdir(extract_dir)
-    processed_count = 0
-    for photo in photos:
-        photo_path = os.path.join(extract_dir, photo)
-        if processor.process_image(photo, photo_path):
-            processed_count += 1
-            
+    processed_count = index_event_photos(event_id)
     event.photo_count = processed_count
-    event.status = "completed"
+    event.status = "completed" if processed_count > 0 else "failed"
     update_event(event)
 
 @router.post("/events/{event_id}/upload-zip")
