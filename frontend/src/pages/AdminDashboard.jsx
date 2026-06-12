@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import { motion } from 'framer-motion';
-import { Upload, Link as LinkIcon, RefreshCcw, FolderArchive } from 'lucide-react';
+import { Upload, Link as LinkIcon, RefreshCcw, FolderArchive, Trash2 } from 'lucide-react';
 
 const API_BASE = 'http://localhost:8000/api';
 
@@ -48,6 +48,16 @@ export default function AdminDashboard() {
       alert("Failed to create event");
     }
     setLoading(false);
+  };
+
+  const handleDelete = async (eventId) => {
+    if (!window.confirm("Are you sure you want to delete this event? This will also delete all associated photos and vectors.")) return;
+    try {
+      await axios.delete(`${API_BASE}/events/${eventId}`);
+      fetchEvents();
+    } catch (err) {
+      alert("Failed to delete event");
+    }
   };
 
   return (
@@ -165,7 +175,7 @@ export default function AdminDashboard() {
                       <span className="text-xs font-mono">{new Date(evt.created_at).toLocaleDateString()}</span>
                     </div>
                   </div>
-                  <div>
+                  <div className="flex items-center gap-3">
                     <span className={`px-3 py-1 rounded-full text-xs font-medium ${
                       evt.status === 'completed' ? 'bg-green-500/20 text-green-400' :
                       evt.status === 'processing' ? 'bg-yellow-500/20 text-yellow-400 animate-pulse' :
@@ -174,6 +184,9 @@ export default function AdminDashboard() {
                     }`}>
                       {evt.status.toUpperCase()}
                     </span>
+                    <button onClick={() => handleDelete(evt.id)} className="text-red-400 hover:text-red-300 transition-colors p-2 rounded-full hover:bg-red-500/10" title="Delete Event">
+                      <Trash2 className="w-4 h-4" />
+                    </button>
                   </div>
                 </motion.div>
               ))

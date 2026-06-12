@@ -6,7 +6,7 @@ from typing import List
 from fastapi import APIRouter, UploadFile, File, Form, HTTPException, BackgroundTasks
 from fastapi.responses import FileResponse
 
-from models.database import EventModel, get_event, get_all_events, create_event, update_event
+from models.database import EventModel, get_event, get_all_events, create_event, update_event, delete_event
 from services.drive_sync import index_event_photos, sync_drive_event
 from services.face_processor import FaceProcessor
 from datetime import datetime
@@ -16,6 +16,15 @@ router = APIRouter()
 @router.get("/events", response_model=List[EventModel])
 def list_events():
     return get_all_events()
+
+@router.delete("/events/{event_id}")
+def delete_existing_event(event_id: str):
+    event = get_event(event_id)
+    if not event:
+        raise HTTPException(status_code=404, detail="Event not found")
+        
+    delete_event(event_id)
+    return {"message": "Event deleted successfully"}
 
 @router.post("/events", response_model=EventModel)
 def create_new_event(

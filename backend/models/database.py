@@ -3,6 +3,7 @@ from typing import List, Optional
 from datetime import datetime
 import json
 import os
+import shutil
 
 DB_FILE = "data/events.json"
 
@@ -53,3 +54,14 @@ def update_event(event: EventModel):
     if event.id in db:
         db[event.id] = event.model_dump(mode='json')
         _save_db(db)
+
+def delete_event(event_id: str):
+    db = _load_db()
+    if event_id in db:
+        del db[event_id]
+        _save_db(db)
+        
+    event_dir = os.path.join("data", "events", event_id)
+    if os.path.exists(event_dir):
+        shutil.rmtree(event_dir)
+
