@@ -29,6 +29,8 @@ def index_event_photos(event_id: str) -> int:
         if os.path.isfile(photo_path) and processor.process_image(photo, photo_path):
             indexed_photos.add(photo)
 
+    # Save index ONCE at the end of the batch instead of per-photo
+    processor.save_index()
     return len(set(processor.mapping.values()))
 
 

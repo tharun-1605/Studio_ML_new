@@ -3,7 +3,7 @@ import axios from 'axios';
 import { motion } from 'framer-motion';
 import { Upload, Link as LinkIcon, RefreshCcw, FolderArchive, Trash2 } from 'lucide-react';
 
-const API_BASE = 'http://localhost:8000/api';
+const API_BASE = `http://${window.location.hostname}:8000/api`;
 
 export default function AdminDashboard() {
   const [events, setEvents] = useState([]);

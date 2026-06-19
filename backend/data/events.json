@@ -1,1 +1,11 @@
-{}
+{
+    "b3aff5cc-f6e2-451f-91dd-c874b1413d7b": {
+        "id": "b3aff5cc-f6e2-451f-91dd-c874b1413d7b",
+        "name": "test",
+        "mode": "archive",
+        "status": "completed",
+        "drive_link": null,
+        "created_at": "2026-06-18T16:10:53.219159",
+        "photo_count": 53
+    }
+}
