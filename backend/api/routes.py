@@ -6,9 +6,10 @@ from typing import List
 from fastapi import APIRouter, UploadFile, File, Form, HTTPException, BackgroundTasks
 from fastapi.responses import FileResponse
 
-from models.database import EventModel, get_event, get_all_events, create_event, update_event, delete_event
+from models.database import EventModel, get_event, get_all_events, create_event, update_event, delete_event, GuestModel, create_guest, get_guests_by_event, update_guest
 from services.drive_sync import index_event_photos, sync_drive_event
 from services.face_processor import FaceProcessor
+from services.whatsapp import send_photos_to_whatsapp
 from datetime import datetime
 
 router = APIRouter()
@@ -91,6 +92,52 @@ def process_archive_background(event_id: str, zip_path: str):
     event.photo_count = processed_count
     event.status = "completed" if processed_count > 0 else "failed"
     update_event(event)
+
+    # Automatically process guests and send WhatsApp messages
+    if event.status == "completed":
+        guests = get_guests_by_event(event_id)
+        if guests:
+            processor = FaceProcessor(event_id)
+            for guest in guests:
+                if not guest.notified and os.path.exists(guest.selfie_path):
+                    matches = processor.search_faces(guest.selfie_path)
+                    if matches:
+                        # Construct a mock photo URL base (in a real app, use the actual domain from env)
+                        base_url = "http://localhost:8080/api/photos"
+                        match_urls = [f"{base_url}/{event_id}/{m}" for m in matches]
+                        send_photos_to_whatsapp(guest.phone, match_urls, event.name)
+                        guest.notified = True
+                        update_guest(guest)
+
+@router.post("/guests/register")
+async def register_guest(
+    event_id: str = Form(...),
+    name: str = Form(...),
+    phone: str = Form(...),
+    file: UploadFile = File(...)
+):
+    event = get_event(event_id)
+    if not event:
+        raise HTTPException(status_code=404, detail="Event not found")
+        
+    os.makedirs("data/guests", exist_ok=True)
+    guest_id = str(uuid.uuid4())
+    selfie_path = f"data/guests/{guest_id}_{file.filename}"
+    
+    with open(selfie_path, "wb") as buffer:
+        shutil.copyfileobj(file.file, buffer)
+        
+    guest = GuestModel(
+        id=guest_id,
+        event_id=event_id,
+        name=name,
+        phone=phone,
+        selfie_path=selfie_path,
+        created_at=datetime.utcnow()
+    )
+    create_guest(guest)
+    return {"message": "Registration successful. You will receive photos on WhatsApp when ready."}
+
 
 @router.post("/events/{event_id}/upload-zip")
 async def upload_archive_zip(event_id: str, background_tasks: BackgroundTasks, file: UploadFile = File(...)):

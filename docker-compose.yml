@@ -1,0 +1,36 @@
+version: '3.8'
+
+services:
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    ports:
+      # Exposing the frontend on port 8080 to avoid conflicts with your other project
+      - "8080:80"
+    depends_on:
+      - backend
+    restart: unless-stopped
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    # No ports exposed to host. The frontend Nginx proxies /api to this backend container.
+    environment:
+      - MONGO_URI=mongodb://mongodb:27017/
+    depends_on:
+      - mongodb
+    volumes:
+      - ./backend/data:/app/data
+    restart: unless-stopped
+
+  mongodb:
+    image: mongo:latest
+    # No ports exposed to host. Only accessible within the docker network.
+    volumes:
+      - mongodb_data:/data/db
+    restart: unless-stopped
+
+volumes:
+  mongodb_data:

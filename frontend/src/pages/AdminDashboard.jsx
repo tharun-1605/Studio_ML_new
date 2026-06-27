@@ -3,7 +3,7 @@ import axios from 'axios';
 import { motion } from 'framer-motion';
 import { Upload, Link as LinkIcon, RefreshCcw, FolderArchive, Trash2 } from 'lucide-react';
 
-const API_BASE = `http://${window.location.hostname}:8000/api`;
+const API_BASE = '/api';
 
 export default function AdminDashboard() {
   const [events, setEvents] = useState([]);
@@ -21,6 +21,19 @@ export default function AdminDashboard() {
       setEvents(res.data);
     } catch (err) {
       console.error(err);
+    }
+  };
+
+  const handleUploadZip = async (eventId, file) => {
+    if (!file) return;
+    try {
+      const uploadData = new FormData();
+      uploadData.append('file', file);
+      await axios.post(`${API_BASE}/events/${eventId}/upload-zip`, uploadData);
+      fetchEvents();
+      alert("Upload successful! Processing has started in the background.");
+    } catch (err) {
+      alert("Failed to upload ZIP");
     }
   };
 
@@ -124,12 +137,11 @@ export default function AdminDashboard() {
 
               {form.mode === 'archive' && (
                 <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }}>
-                  <label className="block text-sm font-medium mb-1 text-muted-foreground">Upload Photos (ZIP)</label>
+                  <label className="block text-sm font-medium mb-1 text-muted-foreground">Upload Photos (ZIP) <span className="text-xs font-normal">(Optional right now)</span></label>
                   <div className="border-2 border-dashed border-border rounded-lg p-6 text-center hover:border-primary/50 transition-colors relative cursor-pointer group">
                     <input 
                       type="file" 
                       accept=".zip" 
-                      required
                       className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
                       onChange={e => setSelectedFile(e.target.files[0])}
                     />
@@ -184,6 +196,12 @@ export default function AdminDashboard() {
                     }`}>
                       {evt.status.toUpperCase()}
                     </span>
+                    {evt.mode === 'archive' && evt.status === 'pending' && (
+                      <label className="text-primary hover:text-primary/80 transition-colors p-2 rounded-full hover:bg-primary/10 cursor-pointer flex items-center justify-center" title="Upload Event ZIP">
+                        <Upload className="w-4 h-4" />
+                        <input type="file" accept=".zip" className="hidden" onChange={e => handleUploadZip(evt.id, e.target.files[0])} />
+                      </label>
+                    )}
                     <button onClick={() => handleDelete(evt.id)} className="text-red-400 hover:text-red-300 transition-colors p-2 rounded-full hover:bg-red-500/10" title="Delete Event">
                       <Trash2 className="w-4 h-4" />
                     </button>

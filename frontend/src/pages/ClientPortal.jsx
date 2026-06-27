@@ -3,7 +3,7 @@ import axios from 'axios';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Camera, Image as ImageIcon, Download, Search, CheckCircle2, RefreshCcw } from 'lucide-react';
 
-const API_BASE = `http://${window.location.hostname}:8000/api`;
+const API_BASE = '/api';
 
 export default function ClientPortal() {
   const [events, setEvents] = useState([]);
@@ -13,11 +13,14 @@ export default function ClientPortal() {
   const [loading, setLoading] = useState(false);
   const [matches, setMatches] = useState(null);
 
+  const [name, setName] = useState('');
+  const [phone, setPhone] = useState('');
+  const [registrationSuccess, setRegistrationSuccess] = useState(false);
+
   useEffect(() => {
-    // Fetch active events
+    // Fetch all active/pending events so users can register early
     axios.get(`${API_BASE}/events`).then(res => {
-      // Filter out events that aren't ready
-      setEvents(res.data.filter(e => e.status === 'completed' || e.mode === 'live'));
+      setEvents(res.data.filter(e => e.status !== 'failed'));
     });
   }, []);
 
@@ -30,19 +33,34 @@ export default function ClientPortal() {
     }
   };
 
-  const handleSearch = async () => {
-    if (!selectedEvent || !selfie) return;
+  const handleRegister = async () => {
+    if (!selectedEvent || !selfie || !name || !phone) return;
     setLoading(true);
     setMatches(null);
+    setRegistrationSuccess(false);
+    
     try {
-      const formData = new FormData();
-      formData.append('event_id', selectedEvent);
-      formData.append('file', selfie);
+      // 1. Register Guest
+      const regData = new FormData();
+      regData.append('event_id', selectedEvent);
+      regData.append('name', name);
+      regData.append('phone', phone);
+      regData.append('file', selfie);
+      await axios.post(`${API_BASE}/guests/register`, regData);
       
-      const res = await axios.post(`${API_BASE}/search`, formData);
-      setMatches(res.data.matches);
+      setRegistrationSuccess(true);
+      
+      // 2. Check if event is already completed/live, if so, show photos now too!
+      const evt = events.find(e => e.id === selectedEvent);
+      if (evt && (evt.status === 'completed' || evt.mode === 'live')) {
+        const searchData = new FormData();
+        searchData.append('event_id', selectedEvent);
+        searchData.append('file', selfie);
+        const res = await axios.post(`${API_BASE}/search`, searchData);
+        setMatches(res.data.matches);
+      }
     } catch (err) {
-      alert("Failed to search faces. Make sure a clear face is visible.");
+      alert("Failed to register. Please check your connection and try again.");
     }
     setLoading(false);
   };
@@ -93,7 +111,42 @@ export default function ClientPortal() {
                 className="glass-panel p-6 rounded-2xl relative overflow-hidden"
               >
                 <div className="absolute top-0 left-0 w-1 h-full bg-primary"></div>
-                <h2 className="text-xl font-bold mb-4 flex items-center gap-2"><span className="bg-primary/20 text-primary w-6 h-6 rounded-full flex items-center justify-center text-sm">2</span> Add Your Selfie</h2>
+                <h2 className="text-xl font-bold mb-4 flex items-center gap-2"><span className="bg-primary/20 text-primary w-6 h-6 rounded-full flex items-center justify-center text-sm">2</span> Your Details</h2>
+                <div className="space-y-4">
+                  <div>
+                    <label className="block text-sm font-medium mb-1 text-muted-foreground">Full Name</label>
+                    <input 
+                      type="text" 
+                      className="w-full bg-background border border-border rounded-xl px-4 py-3 focus:ring-2 focus:ring-primary outline-none"
+                      value={name}
+                      onChange={e => setName(e.target.value)}
+                      placeholder="e.g. Jane Doe"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium mb-1 text-muted-foreground">WhatsApp Number</label>
+                    <input 
+                      type="tel" 
+                      className="w-full bg-background border border-border rounded-xl px-4 py-3 focus:ring-2 focus:ring-primary outline-none"
+                      value={phone}
+                      onChange={e => setPhone(e.target.value)}
+                      placeholder="e.g. +1 234 567 8900"
+                    />
+                  </div>
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
+
+          <AnimatePresence>
+            {selectedEvent && name && phone && (
+              <motion.div 
+                initial={{ opacity: 0, height: 0 }} 
+                animate={{ opacity: 1, height: 'auto' }} 
+                className="glass-panel p-6 rounded-2xl relative overflow-hidden"
+              >
+                <div className="absolute top-0 left-0 w-1 h-full bg-primary"></div>
+                <h2 className="text-xl font-bold mb-4 flex items-center gap-2"><span className="bg-primary/20 text-primary w-6 h-6 rounded-full flex items-center justify-center text-sm">3</span> Add Your Selfie</h2>
                 
                 {selfiePreview ? (
                   <div className="relative rounded-xl overflow-hidden group">
@@ -125,17 +178,17 @@ export default function ClientPortal() {
           </AnimatePresence>
 
           <AnimatePresence>
-            {selectedEvent && selfie && !matches && (
+            {selectedEvent && name && phone && selfie && !registrationSuccess && (
               <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }}>
                 <button 
-                  onClick={handleSearch}
+                  onClick={handleRegister}
                   disabled={loading}
                   className="w-full bg-primary text-primary-foreground font-bold text-lg py-4 rounded-xl flex items-center justify-center gap-2 hover:bg-primary/90 transition-all shadow-lg shadow-primary/20"
                 >
                   {loading ? (
-                    <><RefreshCcw className="w-5 h-5 animate-spin" /> Analyzing Face...</>
+                    <><RefreshCcw className="w-5 h-5 animate-spin" /> Registering & Analyzing...</>
                   ) : (
-                    <><Search className="w-5 h-5" /> Find My Photos</>
+                    <><CheckCircle2 className="w-5 h-5" /> Register for Event</>
                   )}
                 </button>
               </motion.div>
@@ -198,15 +251,28 @@ export default function ClientPortal() {
               </motion.div>
             )}
             
-            {matches === null && (
+            {registrationSuccess && matches === null && (
               <motion.div 
                 key="placeholder"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                className="border-2 border-dashed border-border rounded-2xl h-full flex flex-col items-center justify-center text-muted-foreground p-8 text-center bg-green-500/5 border-green-500/20"
+              >
+                <CheckCircle2 className="w-16 h-16 mb-4 text-green-500" />
+                <h3 className="text-xl font-bold text-green-500 mb-2">Registration Successful!</h3>
+                <p className="text-lg">You will automatically receive your matching photos on WhatsApp once the event photos are uploaded and processed by the photographer.</p>
+              </motion.div>
+            )}
+            
+            {!registrationSuccess && matches === null && (
+              <motion.div 
+                key="initial-placeholder"
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
                 className="border-2 border-dashed border-border rounded-2xl h-full flex flex-col items-center justify-center text-muted-foreground p-8 text-center opacity-50"
               >
                 <Search className="w-16 h-16 mb-4" />
-                <p className="text-lg">Your matched photos will appear here after search.</p>
+                <p className="text-lg">Register for the event to receive your photos on WhatsApp.</p>
               </motion.div>
             )}
           </AnimatePresence>
