@@ -110,7 +110,7 @@ def process_archive_background(event_id: str, zip_path: str):
                         update_guest(guest)
 
 @router.post("/guests/register")
-async def register_guest(
+def register_guest(
     event_id: str = Form(...),
     name: str = Form(...),
     phone: str = Form(...),
@@ -136,7 +136,23 @@ async def register_guest(
         created_at=datetime.utcnow()
     )
     create_guest(guest)
-    return {"message": "Registration successful. You will receive photos on WhatsApp when ready."}
+    
+    matches = []
+    if event.status == "completed" or (event.mode == "live" and getattr(event, "photo_count", 0) > 0):
+        processor = FaceProcessor(event_id)
+        matches = processor.search_faces(selfie_path)
+        if matches:
+            base_url = "http://localhost:8080/api/photos"
+            match_urls = [f"{base_url}/{event_id}/{m}" for m in matches]
+            send_photos_to_whatsapp(phone, match_urls, event.name)
+            guest.notified = True
+            update_guest(guest)
+            
+    return {
+        "message": "Registration successful. You will receive photos on WhatsApp when ready.",
+        "matches": matches
+    }
+
 
 
 @router.post("/events/{event_id}/upload-zip")

@@ -46,18 +46,22 @@ export default function ClientPortal() {
       regData.append('name', name);
       regData.append('phone', phone);
       regData.append('file', selfie);
-      await axios.post(`${API_BASE}/guests/register`, regData);
+      const res = await axios.post(`${API_BASE}/guests/register`, regData);
       
       setRegistrationSuccess(true);
       
-      // 2. Check if event is already completed/live, if so, show photos now too!
-      const evt = events.find(e => e.id === selectedEvent);
-      if (evt && (evt.status === 'completed' || evt.mode === 'live')) {
-        const searchData = new FormData();
-        searchData.append('event_id', selectedEvent);
-        searchData.append('file', selfie);
-        const res = await axios.post(`${API_BASE}/search`, searchData);
+      if (res.data && Array.isArray(res.data.matches)) {
         setMatches(res.data.matches);
+      } else {
+        // Fallback: Check if event is already completed/live, if so, show photos now too!
+        const evt = events.find(e => e.id === selectedEvent);
+        if (evt && (evt.status === 'completed' || evt.mode === 'live')) {
+          const searchData = new FormData();
+          searchData.append('event_id', selectedEvent);
+          searchData.append('file', selfie);
+          const searchRes = await axios.post(`${API_BASE}/search`, searchData);
+          setMatches(searchRes.data.matches);
+        }
       }
     } catch (err) {
       alert("Failed to register. Please check your connection and try again.");
