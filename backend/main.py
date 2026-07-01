@@ -3,6 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from api.routes import router
 from services.drive_sync import start_sync_service
 
+# Trigger reload
 app = FastAPI(title="AI Photo Retrieval System")
 
 app.add_middleware(
@@ -13,8 +14,11 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+from models.database import seed_admin_user
+
 @app.on_event("startup")
 async def startup_event():
+    seed_admin_user()
     start_sync_service()
 
 app.include_router(router, prefix="/api")

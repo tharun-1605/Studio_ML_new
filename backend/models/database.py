@@ -12,8 +12,29 @@ try:
     db = client.studio_ml
     events_collection = db.events
     guests_collection = db.guests
+    users_collection = db.users
 except Exception as e:
     print(f"Failed to connect to MongoDB: {e}")
+
+import hashlib
+
+def hash_password(password: str) -> str:
+    salt = "studio_ml_salt_123!"
+    return hashlib.sha256((password + salt).encode()).hexdigest()
+
+def verify_password(password: str, password_hash: str) -> bool:
+    return hash_password(password) == password_hash
+
+class UserModel(BaseModel):
+    id: str
+    username: str
+    password_hash: str
+    name: str
+    phone: str
+    selfie_path: Optional[str] = None
+    role: str = "guest" # "guest" or "admin"
+    created_at: datetime
+    referrer: Optional[str] = None
 
 class GuestModel(BaseModel):
     id: str
@@ -23,6 +44,8 @@ class GuestModel(BaseModel):
     selfie_path: str
     created_at: datetime
     notified: bool = False
+    referrer: Optional[str] = None
+
 
 class EventModel(BaseModel):
     id: str
@@ -86,4 +109,44 @@ def update_guest(guest: GuestModel):
         {"id": guest.id},
         {"$set": guest.model_dump(mode='json')}
     )
+
+def get_user_by_username(username: str) -> Optional[UserModel]:
+    try:
+        data = users_collection.find_one({"username": username.lower().strip()})
+        if data:
+            data.pop('_id', None)
+            return UserModel(**data)
+    except Exception as e:
+        print(f"Error getting user: {e}")
+    return None
+
+def create_user(user: UserModel):
+    user_dict = user.model_dump(mode='json')
+    user_dict["username"] = user_dict["username"].lower().strip()
+    users_collection.insert_one(user_dict)
+
+def seed_admin_user():
+    try:
+        # Delete old default admin user if it exists to prevent login with old default credentials
+        old_admin = get_user_by_username("admin")
+        if old_admin and verify_password("admin123", old_admin.password_hash):
+            users_collection.delete_one({"username": "admin"})
+            print("Deleted old default admin user.")
+
+        admin = get_user_by_username("zaadmin")
+        if not admin:
+            import uuid
+            admin_user = UserModel(
+                id=str(uuid.uuid4()),
+                username="zaadmin",
+                password_hash=hash_password("Admin@123"),
+                name="Admin User",
+                phone="+910000000000",
+                role="admin",
+                created_at=datetime.utcnow()
+            )
+            create_user(admin_user)
+            print("Seeded default admin user successfully.")
+    except Exception as e:
+        print(f"Failed to seed admin: {e}")
 
