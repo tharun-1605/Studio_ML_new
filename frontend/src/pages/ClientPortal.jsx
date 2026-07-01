@@ -127,11 +127,12 @@ export default function ClientPortal({ user }) {
       newErrors.name = 'Name must be at least 3 characters';
     }
 
-    const phoneRegex = /^\+?[0-9\s\-()]{8,20}$/;
+    const phoneRegex = /^[0-9]{10}$/;
+    const cleanPhone = phone.trim().replace(/[\s\-()]/g, '');
     if (!phone.trim()) {
       newErrors.phone = 'Please enter your WhatsApp number';
-    } else if (!phoneRegex.test(phone.trim())) {
-      newErrors.phone = 'Please enter a valid phone number (e.g. +1234567890)';
+    } else if (!phoneRegex.test(cleanPhone)) {
+      newErrors.phone = 'Please enter a valid 10-digit phone number';
     }
 
     setErrors(newErrors);
@@ -192,7 +193,7 @@ export default function ClientPortal({ user }) {
       const regData = new FormData();
       regData.append('event_id', selectedEvent);
       regData.append('name', name);
-      regData.append('phone', phone);
+      regData.append('phone', '+91' + phone.trim());
       regData.append('file', selfie);
       regData.append('referrer', referrer);
       
@@ -444,17 +445,24 @@ export default function ClientPortal({ user }) {
                         <label className="block text-sm font-semibold mb-1.5 text-gray-400 flex items-center gap-2">
                           <Phone className="w-4 h-4 text-violet-400" /> WhatsApp Number
                         </label>
-                        <input 
-                          type="tel" 
-                          className={`w-full bg-black/40 border ${errors.phone ? 'border-red-500' : 'border-white/10'} rounded-xl px-4 py-3 focus:border-primary outline-none transition-all text-gray-100 placeholder:text-gray-600`}
-                          value={phone}
-                          onChange={e => {
-                            setPhone(e.target.value);
-                            if (errors.phone) setErrors({...errors, phone: null});
-                          }}
-                          placeholder="e.g. +1 555 019 2834"
-                        />
-                        <p className="mt-1 text-xs text-gray-500">Includes country code for auto photo delivery.</p>
+                        <div className="flex rounded-xl border border-white/10 bg-black/40 overflow-hidden focus-within:border-primary transition-all">
+                          <span className="bg-white/5 px-4 py-3 text-gray-400 border-r border-white/10 flex items-center justify-center font-mono font-bold text-sm select-none">
+                            +91
+                          </span>
+                          <input 
+                            type="tel" 
+                            className="w-full bg-transparent px-4 py-3 outline-none text-gray-100 placeholder:text-gray-600 text-sm"
+                            value={phone}
+                            onChange={e => {
+                              const val = e.target.value.replace(/[^0-9]/g, '');
+                              setPhone(val);
+                              if (errors.phone) setErrors({...errors, phone: null});
+                            }}
+                            placeholder="9876543210"
+                            maxLength={10}
+                          />
+                        </div>
+                        <p className="mt-1.5 text-xs text-gray-500">Enter your 10-digit mobile number.</p>
                         {errors.phone && (
                           <p className="mt-1.5 text-xs text-red-400 flex items-center gap-1">
                             <AlertCircle className="w-3 h-3" /> {errors.phone}

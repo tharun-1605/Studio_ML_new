@@ -18,7 +18,8 @@ import {
   Clock,
   Compass,
   CheckCircle2,
-  XCircle
+  XCircle,
+  Download
 } from 'lucide-react';
 
 const API_BASE = '/api';
@@ -124,6 +125,29 @@ export default function AdminDashboard() {
       }
       setLoadingGuests(false);
     }
+  };
+
+  const handleExportCSV = (eventName, guestList) => {
+    if (!guestList || guestList.length === 0) return;
+    
+    const headers = ["Guest Name", "WhatsApp Number", "Referral Source", "Registered On", "WhatsApp Notification Sent"];
+    const rows = guestList.map(g => [
+      `"${g.name.replace(/"/g, '""')}"`,
+      `"${g.phone}"`,
+      `"${(g.referrer || 'Direct Link').replace(/"/g, '""')}"`,
+      `"${new Date(g.created_at).toLocaleDateString()}"`,
+      g.notified ? "Yes" : "Pending"
+    ]);
+    
+    const csvContent = [headers.join(","), ...rows.map(r => r.join(","))].join("\n");
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.setAttribute("href", url);
+    link.setAttribute("download", `${eventName.toLowerCase().replace(/[^a-z0-9]/g, '_')}_guests.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
   };
 
   // Calculations
@@ -390,9 +414,16 @@ export default function AdminDashboard() {
                       >
                         <div className="flex items-center justify-between mb-4">
                           <h4 className="text-sm font-bold text-gray-200 flex items-center gap-1.5">
-                            <Users className="w-4.5 h-4.5 text-primary" /> Registered Guests
+                            <Users className="w-4.5 h-4.5 text-primary" /> Registered Guests ({guests.length})
                           </h4>
-                          <span className="text-xs text-gray-400 font-medium">Click to collapse</span>
+                          {guests.length > 0 && (
+                            <button 
+                              onClick={() => handleExportCSV(evt.name, guests)}
+                              className="text-xs font-semibold px-3 py-1.5 rounded-lg bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 border border-emerald-500/20 hover:border-emerald-500/30 transition-all flex items-center gap-1.5"
+                            >
+                              <Download className="w-3.5 h-3.5" /> Export CSV
+                            </button>
+                          )}
                         </div>
 
                         {loadingGuests ? (

@@ -74,7 +74,7 @@ export default function LoginRegister({ onLoginSuccess }) {
       data.append('username', registerForm.username);
       data.append('password', registerForm.password);
       data.append('name', registerForm.name);
-      data.append('phone', registerForm.phone);
+      data.append('phone', '+91' + registerForm.phone.trim());
       data.append('referrer', registerForm.referrer);
       data.append('role', registerForm.role);
       if (selfieFile) {
@@ -260,15 +260,21 @@ export default function LoginRegister({ onLoginSuccess }) {
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <label className="block text-[11px] font-bold uppercase tracking-wider text-gray-400 mb-1.5">WhatsApp Number</label>
-                <div className="relative">
-                  <Phone className="w-4.5 h-4.5 text-gray-500 absolute left-3.5 top-1/2 -translate-y-1/2" />
+                <div className="flex rounded-xl border border-white/10 bg-black/40 overflow-hidden focus-within:border-primary transition-all">
+                  <span className="bg-white/5 px-3.5 py-3 text-gray-400 border-r border-white/10 flex items-center justify-center font-mono font-bold text-xs select-none">
+                    +91
+                  </span>
                   <input 
                     type="tel"
                     required
-                    className="w-full bg-black/40 border border-white/10 rounded-xl pl-11 pr-4 py-3 text-sm text-white outline-none focus:border-primary transition-all placeholder:text-gray-600"
-                    placeholder="e.g. +919876543210"
+                    className="w-full bg-transparent px-3 py-3 text-sm text-white outline-none placeholder:text-gray-600"
+                    placeholder="9876543210"
                     value={registerForm.phone}
-                    onChange={e => setRegisterForm({...registerForm, phone: e.target.value})}
+                    onChange={e => {
+                      const val = e.target.value.replace(/[^0-9]/g, '');
+                      setRegisterForm({...registerForm, phone: val});
+                    }}
+                    maxLength={10}
                   />
                 </div>
               </div>
