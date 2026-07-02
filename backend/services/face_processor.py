@@ -40,10 +40,18 @@ class FaceProcessor:
         """Extract faces from an image and add to FAISS index."""
         try:
             image = face_recognition.load_image_file(image_path)
-            # Upsample twice to catch smaller faces in group photos
-            face_locations = face_recognition.face_locations(image, number_of_times_to_upsample=2)
+            
+            # Resize image if it is too large to speed up face detection
+            h, w = image.shape[:2]
+            max_dim = 1600
+            if max(h, w) > max_dim:
+                scale = max_dim / max(h, w)
+                image = cv2.resize(image, (int(w * scale), int(h * scale)))
+                
+            # Upsample once to catch smaller faces in group photos
+            face_locations = face_recognition.face_locations(image, number_of_times_to_upsample=1)
             # Jitter slightly for more robust reference encodings
-            face_encodings = face_recognition.face_encodings(image, face_locations, num_jitters=2)
+            face_encodings = face_recognition.face_encodings(image, face_locations, num_jitters=1)
             
             if not face_encodings:
                 return False
@@ -62,21 +70,29 @@ class FaceProcessor:
             print(f"Error processing {filename}: {e}")
             return False
 
-    def search_faces(self, selfie_path: str, top_k: int = 1000, threshold: float = 0.25):
+    def search_faces(self, selfie_path: str, top_k: int = 1000, threshold: float = 0.22):
         """Search for a face in the FAISS index."""
         if self.index.ntotal == 0:
             return []
             
         try:
             image = face_recognition.load_image_file(selfie_path)
-            # Upsample selfie to ensure even smaller or tricky faces are detected
-            face_locations = face_recognition.face_locations(image, number_of_times_to_upsample=2, model="hog")
+            
+            # Resize selfie if it is too large to speed up detection
+            h, w = image.shape[:2]
+            max_dim = 1024
+            if max(h, w) > max_dim:
+                scale = max_dim / max(h, w)
+                image = cv2.resize(image, (int(w * scale), int(h * scale)))
+                
+            # Upsample once is plenty for selfies
+            face_locations = face_recognition.face_locations(image, number_of_times_to_upsample=1, model="hog")
             
             if not face_locations:
                 return []
                 
-            # Use MAX jitters (100) and the large model for the absolute best, most robust encoding
-            face_encodings = face_recognition.face_encodings(image, face_locations, num_jitters=100, model="large")
+            # Use 1 jitter and large model for best performance and robust encoding
+            face_encodings = face_recognition.face_encodings(image, face_locations, num_jitters=1, model="large")
             
             if not face_encodings:
                 return []
@@ -91,8 +107,8 @@ class FaceProcessor:
             matched_photos = set()
             for i, dist in zip(indices[0], distances[0]):
                 # FAISS IndexFlatL2 returns squared L2 distances
-                # threshold=0.25 means L2 distance of 0.5. The default 0.6 allows false positives. 
-                # 0.5 is a strict threshold that prevents matching with similar-looking people.
+                # threshold=0.22 means L2 distance of ~0.47. The default 0.6 allows false positives. 
+                # 0.47 is a strict threshold that prevents matching with similar-looking people.
                 if i != -1 and dist <= threshold:
                     filename = self.mapping.get(str(i))
                     if filename:

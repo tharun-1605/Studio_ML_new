@@ -87,6 +87,25 @@ def update_event(event: EventModel):
     )
 
 def delete_event(event_id: str):
+    # Clean up guest selfies from disk
+    guests = get_guests_by_event(event_id)
+    for guest in guests:
+        if guest.selfie_path and os.path.exists(guest.selfie_path):
+            # Check if this selfie path is shared by any active user profile
+            user_shared = users_collection.find_one({"selfie_path": guest.selfie_path})
+            # Check if this selfie path is shared by any other guest in another event
+            other_guest_shared = guests_collection.find_one({"selfie_path": guest.selfie_path, "event_id": {"$ne": event_id}})
+            
+            if not user_shared and not other_guest_shared:
+                try:
+                    os.remove(guest.selfie_path)
+                except Exception as e:
+                    print(f"Failed to delete guest selfie file {guest.selfie_path}: {e}")
+                    
+    # Delete guest documents from DB
+    guests_collection.delete_many({"event_id": event_id})
+
+    # Delete event from DB
     events_collection.delete_one({"id": event_id})
         
     event_dir = os.path.join("data", "events", event_id)

@@ -110,6 +110,20 @@ export default function ClientPortal({ user }) {
     }
   }, [user, eventId]);
 
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      if (e.key === 'Escape') {
+        setActivePhoto(null);
+      }
+    };
+    if (activePhoto) {
+      window.addEventListener('keydown', handleKeyDown);
+    }
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [activePhoto]);
+
   const handleSelfieSelect = (e) => {
     const file = e.target.files[0];
     if (file) {
@@ -259,11 +273,13 @@ export default function ClientPortal({ user }) {
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className="fixed inset-0 z-50 bg-black/95 backdrop-blur-md flex items-center justify-center p-4"
+            className="fixed inset-0 z-[100] bg-black/95 backdrop-blur-md flex items-center justify-center p-4 cursor-zoom-out"
+            onClick={() => setActivePhoto(null)}
           >
             <button 
               onClick={() => setActivePhoto(null)} 
-              className="absolute top-4 right-4 p-3 rounded-full bg-white/10 hover:bg-white/20 text-white transition-colors"
+              className="absolute top-6 right-6 p-3 rounded-full bg-white/10 hover:bg-white/20 text-white transition-all duration-300 hover:scale-105 z-[110]"
+              title="Close (Esc)"
             >
               <X className="w-6 h-6" />
             </button>
@@ -271,7 +287,8 @@ export default function ClientPortal({ user }) {
               initial={{ scale: 0.9, y: 20 }}
               animate={{ scale: 1, y: 0 }}
               exit={{ scale: 0.9, y: 20 }}
-              className="relative max-w-4xl max-h-[85vh] overflow-hidden rounded-2xl border border-white/10 shadow-2xl"
+              className="relative max-w-4xl max-h-[85vh] overflow-hidden rounded-2xl border border-white/10 shadow-2xl cursor-default"
+              onClick={(e) => e.stopPropagation()}
             >
               <img 
                 src={`${API_BASE}/photos/${selectedEvent}/${activePhoto}`} 

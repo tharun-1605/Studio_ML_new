@@ -28,8 +28,9 @@ def index_event_photos(event_id: str) -> int:
         photo_path = os.path.join(photos_dir, photo)
         if os.path.isfile(photo_path) and processor.process_image(photo, photo_path):
             indexed_photos.add(photo)
+            processor.save_index()  # Save progress incrementally to prevent data loss on interruption
 
-    # Save index ONCE at the end of the batch instead of per-photo
+    # Save index ONCE at the end of the batch as a final sync
     processor.save_index()
     return len(set(processor.mapping.values()))
 
@@ -165,12 +166,33 @@ def sync_drive_event(event_id: str):
         update_event(event)
 
 
+def sync_archive_event(event_id: str):
+    event = get_event(event_id)
+    if not event or event.mode != "archive" or event.status not in ("pending", "processing"):
+        return
+
+    event.status = "processing"
+    update_event(event)
+
+    try:
+        processed_count = index_event_photos(event_id)
+        event.photo_count = processed_count
+        event.status = "completed" if processed_count > 0 else "failed"
+        update_event(event)
+    except Exception as exc:
+        print(f"Archive sync failed for event {event_id}: {exc}")
+        event.status = "failed"
+        update_event(event)
+
+
 async def drive_sync_loop():
     while True:
         events = get_all_events()
         for event in events:
             if event.mode == "live" and event.status in ("pending", "processing"):
                 await asyncio.to_thread(sync_drive_event, event.id)
+            elif event.mode == "archive" and event.status in ("pending", "processing"):
+                await asyncio.to_thread(sync_archive_event, event.id)
 
         await asyncio.sleep(60)
 
