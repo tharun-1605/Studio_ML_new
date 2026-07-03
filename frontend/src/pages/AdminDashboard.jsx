@@ -24,6 +24,45 @@ import {
 
 const API_BASE = '/api';
 
+const fallbackCopyTextToClipboard = (text) => {
+  const textArea = document.createElement("textarea");
+  textArea.value = text;
+  textArea.style.top = "0";
+  textArea.style.left = "0";
+  textArea.style.position = "fixed";
+  textArea.style.opacity = "0";
+  document.body.appendChild(textArea);
+  textArea.focus();
+  textArea.select();
+  try {
+    const successful = document.execCommand('copy');
+    if (successful) {
+      alert("Copied shareable event link to clipboard!");
+    } else {
+      alert("Failed to copy link. Please copy it manually: " + text);
+    }
+  } catch (err) {
+    console.error("Fallback copy failed: ", err);
+    alert("Failed to copy link. Please copy it manually: " + text);
+  }
+  document.body.removeChild(textArea);
+};
+
+const copyTextToClipboard = (text) => {
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(text)
+      .then(() => {
+        alert("Copied shareable event link to clipboard!");
+      })
+      .catch((err) => {
+        console.error("Failed to copy text: ", err);
+        fallbackCopyTextToClipboard(text);
+      });
+  } else {
+    fallbackCopyTextToClipboard(text);
+  }
+};
+
 export default function AdminDashboard() {
   const [events, setEvents] = useState([]);
   const [loading, setLoading] = useState(false);
