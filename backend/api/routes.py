@@ -114,7 +114,7 @@ def process_archive_background(event_id: str, zip_path: str):
                     matches = processor.search_faces(guest.selfie_path)
                     if matches:
                         # Construct a mock photo URL base (in a real app, use the actual domain from env)
-                        base_url = "http://localhost:8080/api/photos"
+                        base_url = os.getenv("API_PUBLIC_URL", "http://localhost:8080/api/photos")
                         match_urls = [f"{base_url}/{event_id}/{m}" for m in matches]
                         send_photos_to_whatsapp(guest.phone, match_urls, event.name)
                         guest.notified = True
@@ -155,7 +155,7 @@ def register_guest(
         processor = FaceProcessor(event_id)
         matches = processor.search_faces(selfie_path)
         if matches:
-            base_url = "http://localhost:8080/api/photos"
+            base_url = os.getenv("API_PUBLIC_URL", "http://localhost:8080/api/photos")
             match_urls = [f"{base_url}/{event_id}/{m}" for m in matches]
             send_photos_to_whatsapp(phone, match_urls, event.name)
             guest.notified = True
@@ -330,7 +330,7 @@ def register_guest_user(event_id: str, username: str = Form(...)):
         processor = FaceProcessor(event_id)
         matches = processor.search_faces(user.selfie_path)
         if matches:
-            base_url = "http://localhost:8080/api/photos"
+            base_url = os.getenv("API_PUBLIC_URL", "http://localhost:8080/api/photos")
             match_urls = [f"{base_url}/{event_id}/{m}" for m in matches]
             send_photos_to_whatsapp(user.phone, match_urls, event.name)
             guest.notified = True

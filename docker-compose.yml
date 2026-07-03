@@ -1,37 +1,48 @@
 version: '3.8'
 
 services:
-  frontend:
+  ml-nginx:
+    image: nginx:alpine
+    container_name: ml-nginx
+    ports:
+      # Exposing the ML project on port 8080 of the server
+      - "8080:80"
+    volumes:
+      - ./nginx.conf:/etc/nginx/conf.d/default.conf:ro
+    depends_on:
+      - ml-frontend
+      - ml-backend
+    restart: unless-stopped
+
+  ml-frontend:
     build:
       context: ./frontend
       dockerfile: Dockerfile
-    ports:
-      # Exposing the frontend on port 8080 to avoid conflicts with your other project
-      - "8080:80"
+    # Internal port only, mapped through ml-nginx
     depends_on:
-      - backend
+      - ml-backend
     restart: unless-stopped
 
-  backend:
+  ml-backend:
     build:
       context: ./backend
       dockerfile: Dockerfile
-    # No ports exposed to host. The frontend Nginx proxies /api to this backend container.
     environment:
-      - MONGO_URI=mongodb://mongodb:27017/
+      - MONGO_URI=mongodb://ml-mongodb:27017/
+      # The public URL for generated WhatsApp photo links. Update this with your production domain/IP if needed.
+      - API_PUBLIC_URL=http://localhost:8080/api/photos
     depends_on:
-      - mongodb
+      - ml-mongodb
     volumes:
       - ./backend/data:/app/data
     restart: unless-stopped
 
-  mongodb:
+  ml-mongodb:
     image: mongo:latest
-    ports:
-      - "27017:27017"
+    # Internal port only. Avoids conflict on host port 27017.
     volumes:
-      - mongodb_data:/data/db
+      - ml_mongodb_data:/data/db
     restart: unless-stopped
 
 volumes:
-  mongodb_data:
+  ml_mongodb_data:
