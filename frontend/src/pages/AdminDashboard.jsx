@@ -404,8 +404,7 @@ export default function AdminDashboard() {
                           onClick={(e) => {
                             e.stopPropagation();
                             const url = `${window.location.origin}/event/${evt.id}`;
-                            navigator.clipboard.writeText(url);
-                            alert("Copied shareable event link to clipboard!");
+                            copyTextToClipboard(url);
                           }}
                           className="text-emerald-400 hover:text-emerald-300 border border-emerald-500/10 hover:border-emerald-500/30 transition-colors p-2 rounded-xl bg-emerald-500/5 hover:bg-emerald-500/10 flex items-center justify-center"
                           title="Copy Share Link"
