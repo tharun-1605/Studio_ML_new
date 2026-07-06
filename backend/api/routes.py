@@ -73,39 +73,63 @@ def process_archive_background(event_id: str, zip_path: str):
     update_event(event)
     
     extract_dir = os.path.join("data", "events", event_id, "photos")
+    os.makedirs(extract_dir, exist_ok=True)
     
     # Extract ZIP
     try:
         with zipfile.ZipFile(zip_path, 'r') as zip_ref:
-            # Flatten paths or keep structure, but we just want images
             for member in zip_ref.namelist():
                 filename = os.path.basename(member)
                 # skip directories
                 if not filename:
                     continue
                 # skip non-images
-                if not filename.lower().endswith(('.png', '.jpg', '.jpeg')):
+                if not filename.lower().endswith(('.png', '.jpg', '.jpeg', '.webp')):
                     continue
                 
                 source = zip_ref.open(member)
+                
+                # Handle potential duplicate filenames by appending a suffix
+                base_name, ext = os.path.splitext(filename)
                 target_path = os.path.join(extract_dir, filename)
+                counter = 1
+                while os.path.exists(target_path):
+                    filename = f"{base_name}_{counter}{ext}"
+                    target_path = os.path.join(extract_dir, filename)
+                    counter += 1
+                    
                 with open(target_path, "wb") as target:
                     shutil.copyfileobj(source, target)
     except Exception as e:
-        print(f"Failed to extract zip: {e}")
+        print(f"Failed to extract zip for event {event_id}: {e}")
+        event.status = "failed"
+        update_event(event)
+        if os.path.exists(zip_path):
+            try:
+                os.remove(zip_path)
+            except Exception:
+                pass
+        return
+    finally:
+        if os.path.exists(zip_path):
+            try:
+                os.remove(zip_path)
+            except Exception:
+                pass
+        
+    try:
+        processed_count = index_event_photos(event_id)
+        event.photo_count = processed_count
+        event.status = "completed"
+        update_event(event)
+    except Exception as e:
+        print(f"Failed to index photos for event {event_id}: {e}")
         event.status = "failed"
         update_event(event)
         return
-    finally:
-        os.remove(zip_path) # Clean up zip
-        
-    processed_count = index_event_photos(event_id)
-    event.photo_count = processed_count
-    event.status = "completed" if processed_count > 0 else "failed"
-    update_event(event)
 
     # Automatically process guests and send WhatsApp messages
-    if event.status == "completed":
+    try:
         guests = get_guests_by_event(event_id)
         if guests:
             processor = FaceProcessor(event_id)
@@ -113,12 +137,13 @@ def process_archive_background(event_id: str, zip_path: str):
                 if not guest.notified and os.path.exists(guest.selfie_path):
                     matches = processor.search_faces(guest.selfie_path)
                     if matches:
-                        # Construct a mock photo URL base (in a real app, use the actual domain from env)
                         base_url = os.getenv("API_PUBLIC_URL", "http://localhost:8080/api/photos")
                         match_urls = [f"{base_url}/{event_id}/{m}" for m in matches]
                         send_photos_to_whatsapp(guest.phone, match_urls, event.name)
                         guest.notified = True
                         update_guest(guest)
+    except Exception as e:
+        print(f"Failed to process guests or send WhatsApp notifications for event {event_id}: {e}")
 
 @router.post("/guests/register")
 def register_guest(
@@ -177,11 +202,68 @@ async def upload_archive_zip(event_id: str, background_tasks: BackgroundTasks, f
     os.makedirs("data/temp", exist_ok=True)
     temp_zip_path = f"data/temp/{event_id}.zip"
     
+    event.status = "processing"
+    update_event(event)
+
     with open(temp_zip_path, "wb") as buffer:
         shutil.copyfileobj(file.file, buffer)
         
     background_tasks.add_task(process_archive_background, event_id, temp_zip_path)
     return {"message": "Upload successful, processing started in background"}
+
+@router.post("/events/{event_id}/upload-zip-chunk")
+async def upload_archive_zip_chunk(
+    event_id: str,
+    background_tasks: BackgroundTasks,
+    chunk_index: int = Form(...),
+    total_chunks: int = Form(...),
+    filename: str = Form(...),
+    file: UploadFile = File(...)
+):
+    event = get_event(event_id)
+    if not event or event.mode != "archive":
+        raise HTTPException(status_code=400, detail="Invalid event or mode")
+        
+    os.makedirs("data/temp", exist_ok=True)
+    part_path = f"data/temp/{event_id}.zip.part"
+    
+    # If starting a new upload, remove any stale partial files
+    if chunk_index == 0:
+        if os.path.exists(part_path):
+            try:
+                os.remove(part_path)
+            except Exception as e:
+                print(f"Failed to remove stale part file {part_path}: {e}")
+                
+    try:
+        with open(part_path, "ab") as f:
+            shutil.copyfileobj(file.file, f)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to save chunk: {str(e)}")
+        
+    # Check if this is the final chunk
+    if chunk_index == total_chunks - 1:
+        temp_zip_path = f"data/temp/{event_id}.zip"
+        if os.path.exists(temp_zip_path):
+            try:
+                os.remove(temp_zip_path)
+            except Exception:
+                pass
+                
+        try:
+            os.rename(part_path, temp_zip_path)
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=f"Failed to finalize ZIP file: {str(e)}")
+            
+        # Update status to processing immediately
+        event.status = "processing"
+        update_event(event)
+        
+        # Start background processing
+        background_tasks.add_task(process_archive_background, event_id, temp_zip_path)
+        return {"status": "completed", "message": "All chunks received. Processing started."}
+        
+    return {"status": "chunk_received", "chunk_index": chunk_index}
 
 @router.post("/search")
 async def search_faces(event_id: str = Form(...), file: UploadFile = File(...)):

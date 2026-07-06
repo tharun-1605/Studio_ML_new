@@ -75,6 +75,7 @@ export default function AdminDashboard() {
   const [guests, setGuests] = useState([]);
   const [loadingGuests, setLoadingGuests] = useState(false);
   const [uploadingZipId, setUploadingZipId] = useState(null);
+  const [uploadProgress, setUploadProgress] = useState({});
 
   useEffect(() => {
     fetchEvents();
@@ -89,18 +90,70 @@ export default function AdminDashboard() {
     }
   };
 
+  const performChunkedUpload = async (eventId, file) => {
+    const ONE_MB = 1024 * 1024;
+    let chunkSize = 5 * ONE_MB;
+    if (file.size >= 5 * 1024 * ONE_MB) {
+      chunkSize = 50 * ONE_MB; // 50MB for files > 5GB
+    } else if (file.size >= 500 * ONE_MB) {
+      chunkSize = 20 * ONE_MB; // 20MB for files 500MB to 5GB
+    } else if (file.size >= 50 * ONE_MB) {
+      chunkSize = 10 * ONE_MB; // 10MB for files 50MB to 500MB
+    }
+
+    const totalChunks = Math.ceil(file.size / chunkSize);
+    
+    for (let chunkIndex = 0; chunkIndex < totalChunks; chunkIndex++) {
+      const start = chunkIndex * chunkSize;
+      const end = Math.min(start + chunkSize, file.size);
+      const chunkBlob = file.slice(start, end);
+      
+      const formData = new FormData();
+      formData.append('chunk_index', chunkIndex);
+      formData.append('total_chunks', totalChunks);
+      formData.append('filename', file.name);
+      formData.append('file', chunkBlob, file.name);
+      
+      // Update progress state
+      const percent = Math.round((chunkIndex / totalChunks) * 100);
+      setUploadProgress(prev => ({ ...prev, [eventId]: percent }));
+      
+      let attempts = 0;
+      let success = false;
+      while (attempts < 3 && !success) {
+        try {
+          await axios.post(`${API_BASE}/events/${eventId}/upload-zip-chunk`, formData);
+          success = true;
+        } catch (err) {
+          attempts++;
+          if (attempts >= 3) throw err;
+          // Wait 2 seconds before retrying
+          await new Promise(resolve => setTimeout(resolve, 2000));
+        }
+      }
+    }
+    
+    setUploadProgress(prev => ({ ...prev, [eventId]: 100 }));
+  };
+
   const handleUploadZip = async (eventId, file) => {
     if (!file) return;
     setUploadingZipId(eventId);
+    setUploadProgress(prev => ({ ...prev, [eventId]: 0 }));
     try {
-      const uploadData = new FormData();
-      uploadData.append('file', file);
-      await axios.post(`${API_BASE}/events/${eventId}/upload-zip`, uploadData);
+      await performChunkedUpload(eventId, file);
       fetchEvents();
+      alert("ZIP uploaded successfully. Processing started in background.");
     } catch (err) {
-      alert("Failed to upload ZIP");
+      console.error(err);
+      alert("Failed to upload ZIP. Please check your connection and try again.");
     } finally {
       setUploadingZipId(null);
+      setUploadProgress(prev => {
+        const copy = { ...prev };
+        delete copy[eventId];
+        return copy;
+      });
     }
   };
 
@@ -112,6 +165,8 @@ export default function AdminDashboard() {
     }
     
     setLoading(true);
+    // Use a temp ID for uploading file during creation progress bar if needed
+    const tempProgressId = 'creating';
     try {
       const formData = new FormData();
       formData.append('name', form.name);
@@ -121,18 +176,25 @@ export default function AdminDashboard() {
       const res = await axios.post(`${API_BASE}/events`, formData);
       
       if (form.mode === 'archive' && selectedFile) {
-        const uploadData = new FormData();
-        uploadData.append('file', selectedFile);
-        await axios.post(`${API_BASE}/events/${res.data.id}/upload-zip`, uploadData);
+        setUploadProgress(prev => ({ ...prev, [res.data.id]: 0 }));
+        await performChunkedUpload(res.data.id, selectedFile);
       }
       
       setForm({ name: '', mode: 'archive', drive_link: '' });
       setSelectedFile(null);
       fetchEvents();
+      alert("Event created successfully.");
     } catch (err) {
+      console.error(err);
       alert("Failed to create event");
+    } finally {
+      setLoading(false);
+      setUploadProgress(prev => {
+        const copy = { ...prev };
+        delete copy[tempProgressId];
+        return copy;
+      });
     }
-    setLoading(false);
   };
 
   const handleDelete = async (eventId) => {
@@ -341,7 +403,11 @@ export default function AdminDashboard() {
                 disabled={loading}
                 className="w-full bg-primary text-primary-foreground font-bold py-3.5 rounded-xl hover:bg-primary/90 transition-all disabled:opacity-50 text-sm shadow-lg shadow-primary/10"
               >
-                {loading ? "Initializing Event..." : "Create Event Room"}
+                {loading ? (
+                  Object.values(uploadProgress).length > 0
+                    ? `Uploading ZIP (${Object.values(uploadProgress)[0]}%)...`
+                    : "Initializing Event room..."
+                ) : "Create Event Room"}
               </button>
             </form>
           </motion.div>
@@ -391,12 +457,13 @@ export default function AdminDashboard() {
                     
                     <div className="flex items-center gap-3 w-full sm:w-auto justify-between sm:justify-end border-t sm:border-t-0 border-white/5 pt-3 sm:pt-0">
                       <span className={`px-2.5 py-1 rounded-full text-xs font-extrabold border ${
+                        uploadingZipId === evt.id ? 'bg-blue-500/10 text-blue-400 border-blue-500/15' :
                         evt.status === 'completed' ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/15' :
                         evt.status === 'processing' ? 'bg-amber-500/10 text-amber-400 border-amber-500/15 animate-pulse' :
                         evt.status === 'failed' ? 'bg-rose-500/10 text-rose-400 border-rose-500/15' :
                         'bg-blue-500/10 text-blue-400 border-blue-500/15'
                       }`}>
-                        {evt.status.toUpperCase()}
+                        {uploadingZipId === evt.id ? `UPLOADING (${uploadProgress[evt.id] || 0}%)` : evt.status.toUpperCase()}
                       </span>
                       
                       <div className="flex items-center gap-2">
@@ -411,10 +478,13 @@ export default function AdminDashboard() {
                         >
                           <LinkIcon className="w-4 h-4" />
                         </button>
-                        {evt.mode === 'archive' && (evt.status === 'pending' || evt.status === 'completed') && (
-                          <label className="text-gray-300 hover:text-white transition-colors p-2 rounded-xl bg-white/5 border border-white/10 hover:border-white/20 cursor-pointer flex items-center justify-center" title="Upload Event ZIP">
+                        {evt.mode === 'archive' && (evt.status === 'pending' || evt.status === 'completed' || uploadingZipId === evt.id) && (
+                          <label className="text-gray-300 hover:text-white transition-colors p-2 rounded-xl bg-white/5 border border-white/10 hover:border-white/20 cursor-pointer flex items-center justify-center gap-1.5" title="Upload Event ZIP">
                             {uploadingZipId === evt.id ? (
-                              <RefreshCcw className="w-4 h-4 animate-spin text-primary" />
+                              <>
+                                <RefreshCcw className="w-4 h-4 animate-spin text-primary" />
+                                <span className="text-[10px] font-bold text-primary">{uploadProgress[evt.id] !== undefined ? `${uploadProgress[evt.id]}%` : ''}</span>
+                              </>
                             ) : (
                               <Upload className="w-4 h-4" />
                             )}
